@@ -32,13 +32,52 @@ create_api_skeleton <- function(output_dir,
      temp_script_dir <- glue::glue('{temp_package_dir}/R')
      if(!dir.exists(temp_script_dir)) dir.create(temp_script_dir)
      
-     for(category in names(api_json$resources)) file.create(glue::glue('{temp_script_dir}/{category}.R'))
+     # Create a file per API resource.
+     for(resource in names(api_json$resources)) file.create(glue::glue('{temp_script_dir}/{resource}.R'))
      
-     # form strings which can be evaluated to subset json documentation for methods
+     # Create scopes file for scopes functions.
+     file.create(glue::glue('{temp_script_dir}/scopes.R'))
+     
+     # Form strings which can be evaluated to subset json documentation for methods
      methods <- api_json$resources %>% unlist(recursive = T) %>% names() %>%purrr::keep(~(.x %>% stringr::str_detect('methods.*.id')) & (.x %>% stringr::str_detect('.id$'))) %>% stringr::str_replace_all('.id$', '')
      method_docs <- paste0('api_json$resources$', methods %>% stringr::str_replace_all(stringr::fixed('.'), '$')) %>% sort()
-     base_url <- api_json$rootUrl   ### NOT baseUrl since Gargle doesn't handle multiple forward slashes in the base_url field of a request.
+     base_url <- api_json$rootUrl   ### NOT baseUrl since gargle doesn't handle multiple forward slashes in the base_url field of a request.
      path_prefix <- sub(api_json$rootUrl, '', api_json$baseUrl)
+     all_scopes <- api_json$auth$oauth2$scopes %>% names()
+     
+     # Create get_function_scopes function.
+     scopes_text <- glue::glue("\n\t",
+                               "#' Get a list of scopes needed for an API function",
+                               "\n\t",
+                               "#' This function returns the list of needed scopes for a given API function.",
+                               "\n\t",
+                               "#'",
+                               "' @seealso \\href{{https://developers.google.com/identity/protocols/oauth2/scopes}}",
+                               "\n\t",
+                               "#' @param function_name The name of the API function to return scopes for.",
+                               "\n\t",
+                               "#' @param return_all Whether to return all scopes for the API. Defaults to FALSE.",
+                               "\n\t",
+                               "#' @export",
+                               "\n\t",
+                               "get_function_scopes <- function(function_name = NULL, return_all = F){{",
+                               "\n\n\t\t",
+                               "# Return all scopes",
+                               "\n\t\t",
+                               "scopes <- c(",
+                               .trim = F)
+   
+     for(scope in all_scopes){
+             scopes_text <- glue::glue("{scopes_text}",
+                                       "\n\t\t\t'{scope}'",
+                                       ifelse(last(all_scopes) != scope, ",", ")"),
+                                       .trim = F)
+     }
+     
+     scopes_text <- glue::glue("{scopes_text}",
+                               "\n\n\t\t",
+                               "if(return_all) return(scopes)",
+                               .trim = F)
      
      # https://developers.google.com/discovery/v1/reference/apis
      for(method_doc in method_docs){
@@ -85,10 +124,14 @@ create_api_skeleton <- function(output_dir,
                
                response_schema <- api_json$schemas[response_schema_ref]
           }else{
-               
-               response_schema_ref <- NULL
-               
-               response_schema <- NULL
+                  
+                  response_schema_ref <- NULL
+                  
+                  if(length(method_info$response$`$ref`) > 0){
+                          response_schema <- api_json$schemas[[method_info$response$`$ref`]]
+                  }else{
+                          response_schema <- NULL
+                  }
           }
           
           # parameter names ordered - likely not important because gargle takes care of substitutions
@@ -99,9 +142,8 @@ create_api_skeleton <- function(output_dir,
           if(length(param_order) > 0) params <- params[param_order]
           
           
-          ############ Generate documentation text ###############
-          
-          doctext <- glue::glue(
+############ Generate documentation text ###############
+          doc_text <- glue::glue(
                
                "\n\t",
                "#' {function_description}",
@@ -126,13 +168,13 @@ create_api_skeleton <- function(output_dir,
           
           for(scope in scopes){
                
-               doctext <- glue::glue("{doctext}",
+               doc_text <- glue::glue("{doc_text}",
                                      "\n\t",
                                      "#' \\item {scope}", 
                                      .trim = F)
           }
           
-          doctext <- glue::glue("{doctext}", 
+          doc_text <- glue::glue("{doc_text}", 
                                 "\n\t",
                                 "#' }}", 
                                 .trim = F)
@@ -141,67 +183,96 @@ create_api_skeleton <- function(output_dir,
                
                param_info <- method_info$parameters[[param]]
                
-               doctext <- glue::glue("{doctext}",
+               doc_text <- glue::glue("{doc_text}",
                                      "\n\t",
                                      "#' @param {param} {param_info$description}", 
                                      .trim = F)
           }
           
-          doctext <- glue::glue("{doctext}", 
+          # Add system param "fields".
+          doc_text <- glue::glue("{doc_text}",
+                                 "\n\t",
+                                 "#' @param fields {api_json$parameters$fields$description}",
+                                 ifelse(!is.null(response_schema), " Possible fields are {paste({response_schema$properties %>% names()}, collapse = ', ')}.", ''),
+                                 .trim = F)
+          
+          # Add token and return_response as well.
+          doc_text <- glue::glue("{doc_text}", 
                                 "\n\t",
-                                "#' @param token A token prepared by one of Gargle's token generating functions. Defaults to NULL (call \\code{{\\link[gargle]{{token_fetch}}}} with appropriate scopes).",
+                                "#' @param token A token prepared by one of gargle's token generating functions. Defaults to gargle::token_fetch(scopes = \\code{{\\link[{this_package}]{{get_function_scopes}}}}(function_name). See \\code{{\\link[gargle]{{token_fetch}}}} for more info.",
                                 "\n\t",
                                 "#' @param return_response Whether to return the response or the response content. Defaults to FALSE (return response content).", 
                                 .trim = F)
           
-          doctext <- glue::glue("{doctext}",
+          doc_text <- glue::glue("{doc_text}",
                                 "\n\t",
                                 "#' @export", 
                                 .trim = F)
           
-          ############ Generate function text ###############
+############ Generate function text ###############
           
-          functiontext <- glue::glue("\t",
-                                     "{function_name} <- function(", 
+          function_text <- glue::glue("\t",
+                                     "{function_name} <- function(",
                                      .trim = F)
           
           for(param in names(params)){
-               
-               param_info <- method_info$parameters[[param]]
-               
-               functiontext <- glue::glue("{functiontext}","{param} = NULL, ", .trim = F)
-               
+                function_text <- glue::glue("{function_text}", "{param} = NULL, ")
           }
           
           # Finish off function parameters list
-          functiontext <- paste0(functiontext, 'token = NULL, return_response = F){')
+          function_text <- glue::glue("{function_text}",
+                                      "token = gargle::token_fetch(scopes = get_function_scopes('{function_name}')), return_response = F, fields = NULL){{",
+                                      .trim = F)
           
-          scopes_text <- paste0("c('", paste(scopes, collapse = "', '"), "')") 
+          # Add scopes for the new function to get_function_scopes.
+          scopes_text <- glue::glue("{scopes_text}",
+                                    "\n\n\n\t\t",
+                                    "# Return scopes for {function_name}",
+                                    "\n\t\t",
+                                    "scopes <- c(",
+                                    .trim = F)
+          
+          for(scope in scopes){
+                  scopes_text <- glue::glue("{scopes_text}",
+                                            "\n\t\t\t'{scope}'",
+                                            ifelse(last(scopes) != scope, ",", ")"),
+                                            .trim = F)
+          }
+          
+          scopes_text <- glue::glue("{scopes_text}",
+                                    "\n\n\t\t",
+                                    "if(function_name == '{function_name}') return(scopes)",
+                                    .trim = F)
           
           # Build function
           # TODO: NEED TO ADD useragent to request_make.
-          functiontext <- glue::glue("{functiontext}", 
+          function_text <- glue::glue("{function_text}", 
                                      "\n\t\t",
                                      "params <- as.list(environment())[!names(as.list(environment())) %in% c('body', 'return_response', 'token')]",
-                                     "\n\t\t",
-                                     "scopes <- {scopes_text} %>% strsplit(',') %>% purrr::pluck(1)",
-                                     "\n\t\t",
-                                     "if(is.null(token)) token <- gargle::token_fetch(scopes = scopes)",
                                      "\n\t\t",
                                      "req <- gargle::request_build(method = '{method}', path = '{path}', params = params, body = NULL, token = token, base_url = '{base_url}')",
                                      "\n\t\t",
                                      "res <- gargle::request_make(req, encode = 'json')",
                                      "\n\t\t",
-                                     "res",
+                                     "if(return_response) return(res)",
+                                     "\n\t\t",
+                                     "httr::content(res)",
                                      "\n\t",
                                      "}",
                                      .trim = F)
           
           # Update appropriate file with new documentation and function.
-          readr::write_lines(doctext, glue::glue('{temp_script_dir}/{category}.R'), append = T)
-          readr::write_lines(functiontext, glue::glue('{temp_script_dir}/{category}.R'), append = T)
-          
+          readr::write_lines(doc_text, glue::glue('{temp_script_dir}/{category}.R'), append = T)
+          readr::write_lines(function_text, glue::glue('{temp_script_dir}/{category}.R'), append = T)
      }
+     
+     scopes_text <- glue::glue("{scopes_text}",
+                               "\n\t",
+                               "}",
+                               .trim = F)
+     
+     # Write scopes function to file.
+     readr::write_lines(scopes_text, glue::glue('{temp_script_dir}/scopes.R'), append = F)
      
      # Output package files
      file.copy(from = temp_package_dir, to = output_dir, recursive = T, overwrite = T)
