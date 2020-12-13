@@ -12,7 +12,7 @@
 #' @family Google Discovery API functions
 #' 
 #' @export
-discovery_apis_list <- function(name = NULL, preferred = NULL){
+list_google_apis <- function(name = NULL, preferred = NULL){
   
   name <- tolower(name)
   
@@ -48,7 +48,7 @@ discovery_apis_list <- function(name = NULL, preferred = NULL){
 #' @return Details of the API 
 #' @family Google Discovery API functions
 #' @export
-discovery_api <- function(api, version){
+get_google_api <- function(api, version){
   
   the_url <- glue::glue("https://www.googleapis.com/discovery/v1/apis/{api}/{version}/rest")
   

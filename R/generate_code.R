@@ -6,17 +6,21 @@ this_package <- 'googlePackageMaker'
 #' This will create a file with the skeleton of the API functions 
 #'   for the specified library
 #' 
-#' @param output_dir Directory to write the package to
-#' @param package_name Name of the package to create
-#' @param api_json The json from \link{discovery_api}
+#' @api_name The api to fetch. Run \code{\link[{this_package}]{list_google_apis} for a list of options.
+#' @api_version The api version to fetch. Run \code{\link[{this_package}]{list_google_apis} for a list of options.
+#' @param output_dir Directory path to write the package to.
+#' @param package_name Name of the package to create.
 #' 
-#' @return TRUE if successful, side effect will write a file
+#' @return TRUE if successful, side effect will write a file.
 #' @family Google Discovery API functions
 #' @export
-create_api_skeleton <- function(output_dir,
-                                package_name,
-                                api_json){
+make_google_package <- function(api_name,
+                                api_version,
+                                output_dir,
+                                package_name){
      
+   api_info <- get_google_api(api_name, api_version)
+   
      final_package_path <- glue::glue('{output_dir}/{package_name}') %>% sub(pattern = '//', replacement = '/')
      
      if(dir.exists(final_package_path)){
@@ -33,17 +37,17 @@ create_api_skeleton <- function(output_dir,
      if(!dir.exists(temp_script_dir)) dir.create(temp_script_dir)
      
      # Create a file per API resource.
-     for(resource in names(api_json$resources)) file.create(glue::glue('{temp_script_dir}/{resource}.R'))
+     for(resource in names(api_info$resources)) file.create(glue::glue('{temp_script_dir}/{resource}.R'))
      
      # Create scopes file for scopes functions.
      file.create(glue::glue('{temp_script_dir}/scopes.R'))
      
      # Form strings which can be evaluated to subset json documentation for methods
-     methods <- api_json$resources %>% unlist(recursive = T) %>% names() %>%purrr::keep(~(.x %>% stringr::str_detect('methods.*.id')) & (.x %>% stringr::str_detect('.id$'))) %>% stringr::str_replace_all('.id$', '')
-     method_docs <- paste0('api_json$resources$', methods %>% stringr::str_replace_all(stringr::fixed('.'), '$')) %>% sort()
-     base_url <- api_json$rootUrl   ### NOT baseUrl since gargle doesn't handle multiple forward slashes in the base_url field of a request.
-     path_prefix <- sub(api_json$rootUrl, '', api_json$baseUrl)
-     all_scopes <- api_json$auth$oauth2$scopes %>% names()
+     methods <- api_info$resources %>% unlist(recursive = T) %>% names() %>%purrr::keep(~(.x %>% stringr::str_detect('methods.*.id')) & (.x %>% stringr::str_detect('.id$'))) %>% stringr::str_replace_all('.id$', '')
+     method_docs <- paste0('api_info$resources$', methods %>% stringr::str_replace_all(stringr::fixed('.'), '$')) %>% sort()
+     base_url <- api_info$rootUrl   ### NOT baseUrl since gargle doesn't handle multiple forward slashes in the base_url field of a request.
+     path_prefix <- sub(api_info$rootUrl, '', api_info$baseUrl)
+     all_scopes <- api_info$auth$oauth2$scopes %>% names()
      
      # Create get_function_scopes function.
      scopes_text <- glue::glue("\n\t",
@@ -83,7 +87,7 @@ create_api_skeleton <- function(output_dir,
      for(method_doc in method_docs){
           
           # category of the function and file destination of the function code
-          category <- method_doc %>% stringr::str_replace(stringr::fixed('api_json$resources$'), '') %>% stringr::str_sub(1,stringr::str_locate(., stringr::fixed('$'))[[1]] - 1)
+          category <- method_doc %>% stringr::str_replace(stringr::fixed('api_info$resources$'), '') %>% stringr::str_sub(1,stringr::str_locate(., stringr::fixed('$'))[[1]] - 1)
           
           # documentation json subsetted by method
           method_info <- eval(parse(text = method_doc))
@@ -109,7 +113,7 @@ create_api_skeleton <- function(output_dir,
                
                body_schema_ref <- method_info$request$`ref`
                
-               body_schema <- api_json$schemas[body_schema_ref]
+               body_schema <- api_info$schemas[body_schema_ref]
           }else{
                
                body_schema_ref <- NULL
@@ -122,13 +126,13 @@ create_api_skeleton <- function(output_dir,
                
                response_schema_ref <- method_info$request$`ref`
                
-               response_schema <- api_json$schemas[response_schema_ref]
+               response_schema <- api_info$schemas[response_schema_ref]
           }else{
                   
                   response_schema_ref <- NULL
                   
                   if(length(method_info$response$`$ref`) > 0){
-                          response_schema <- api_json$schemas[[method_info$response$`$ref`]]
+                          response_schema <- api_info$schemas[[method_info$response$`$ref`]]
                   }else{
                           response_schema <- NULL
                   }
@@ -150,11 +154,11 @@ create_api_skeleton <- function(output_dir,
                "\n\t",
                "#'",
                "\n\t",
-               "#' Autogenerated via \\code{{\\link[{this_package}]{{create_api_skeleton}}}}",
+               "#' Autogenerated via \\code{{\\link[{this_package}]{{generate_google_package}}}}",
                "\n\t",
                "#'",
                "\n\t",
-               "#' @seealso \\href{{{api_json$documentationLink}}}{{Google Documentation}}",
+               "#' @seealso \\href{{{api_info$documentationLink}}}{{Google Documentation}}",
                "\n\t",
                "#'",
                "\n\t",
@@ -192,7 +196,7 @@ create_api_skeleton <- function(output_dir,
           # Add system param "fields".
           doc_text <- glue::glue("{doc_text}",
                                  "\n\t",
-                                 "#' @param fields {api_json$parameters$fields$description}",
+                                 "#' @param fields {api_info$parameters$fields$description}",
                                  ifelse(!is.null(response_schema), " Possible fields are {paste({response_schema$properties %>% names()}, collapse = ', ')}.", ''),
                                  .trim = F)
           
