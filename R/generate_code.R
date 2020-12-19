@@ -42,13 +42,13 @@ make_google_package <- function(api_name,
    for(resource in names(api_info$resources)) file.create(glue::glue('{temp_script_dir}/{resource}.R'))
    
    # Create scopes file for scopes functions.
-   file.create(glue::glue('{temp_script_dir}/scopes.R'))
+   file.create(glue::glue('{temp_script_dir}/zzz_scopes.R'))
    
    # Create schemas file for schema functions.
-   file.create(glue::glue('{temp_script_dir}/schemas.R'))
+   file.create(glue::glue('{temp_script_dir}/zzz_schemas.R'))
    
    
-   ############  Create get_function_scopes function. ############
+############  Create get_function_scopes function. ############
    all_scopes <- api_info$auth$oauth2$scopes %>% names()
    
    scopes_text <- glue::glue("\n\t",
@@ -84,30 +84,61 @@ make_google_package <- function(api_name,
                              "if(return_all) return(scopes)",
                              .trim = F)
    
-   ############  Create schema functions. ############
+   schemas_text <- ''
+   
+############  Create schema functions. ############
    for(schema_info in api_json$schemas){
       
-      schema_doc_text <- glue::glue("\n\t",
-                                    "#' Create {schema_info$id} object",
-                                    "\n\t",
-                                    "#' {schema_info$description}",
-                                    "\n\t",
-                                    .trim = F)
-                                    
+      schemas_text <- glue::glue("{schemas_text}",
+                                 "\n\t",
+                                 "#' {schema_info$id} object",
+                                 "\n\t",
+                                 "#'",
+                                 "\n\t",
+                                 ifelse(!is.null(schema_info$description), "#' {schema_info$description  %>% stringr::str_replace_all(stringr::fixed('\n'), replacement = ' ')}", "#' Create {schema_info$id} object"),
+                                 "\n\t",
+                                 "#'",
+                                 .trim = F)
+      
+      # Add schema params to schema doc text.                   
       for(param in names(schema_info$properties)){
          
-         param_info <- schema_info$properties[param]
-         
-         schema_doc_text <- glue::glue("\n\t",
-                                       "#' @param {param} ",
+         param_info <- schema_info$properties[[param]]
+        
+         schemas_text <- glue::glue("{schemas_text}",
                                        "\n\t",
-                                       "#' {schema_info$description}",
-                                       "\n\t",
+                                       "#' @param {param} {param_info$description %>% stringr::str_replace_all(stringr::fixed('\n'), replacement = ' ')}",
                                        .trim = F)
-         
       }
       
+      schemas_text <- glue::glue("{schemas_text}",
+                                    "\n\t",
+                                    "#'",
+                                    "\n\t",
+                                    "#' @export",
+                                    "\n\t",
+                                    "{schema_info$id} <- function(",
+                                    .trim = F)
       
+      # Add schema params to schema function text.                  
+      for(param in names(schema_info$properties)){
+         
+         param_info <- schema_info$properties[[param]]
+         
+         schemas_text <- glue::glue("{schemas_text}",
+                                    "{param} = NULL, ",
+                                    .trim = F)
+      }
+      
+      # Remove ,{space} from end of function parameters list.
+      schemas_text <- glue::glue("{schemas_text %>% stringr::str_sub(end = -3)}",
+                                 "){{",
+                                 "\n\t\t",
+                                 "as.list(environment())",
+                                 "\n\t",
+                                 "}}",
+                                 "\n\t",
+                                 .trim = F)
    }
    
    
@@ -334,7 +365,10 @@ make_google_package <- function(api_name,
                                .trim = F)
      
      # Write scopes function to file.
-     readr::write_lines(scopes_text, glue::glue('{temp_script_dir}/scopes.R'), append = F)
+     readr::write_lines(scopes_text, glue::glue('{temp_script_dir}/zzz_scopes.R'), append = F)
+     
+     # Write schema functions to file.
+     readr::write_lines(schemas_text, glue::glue('{temp_script_dir}/zzz_schemas.R'), append = F)
      
      # Output package files
      file.copy(from = temp_package_dir, to = output_dir, recursive = T, overwrite = T)
