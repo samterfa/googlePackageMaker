@@ -49,7 +49,6 @@ make_google_package <- function(api_name,
    
    
    ############  Create get_function_scopes function. ############
-   
    all_scopes <- api_info$auth$oauth2$scopes %>% names()
    
    scopes_text <- glue::glue("\n\t",
@@ -146,9 +145,10 @@ make_google_package <- function(api_name,
           # relevant schema for body of the request
           if(!is.null(method_info$request)){
                
-               body_schema_ref <- method_info$request$`ref`
+               body_schema_ref <- method_info$request$`$ref`
                
                body_schema <- api_info$schemas[body_schema_ref]
+               
           }else{
                
                body_schema_ref <- NULL
@@ -179,7 +179,6 @@ make_google_package <- function(api_name,
           # list of path and query parameters for api call ordered by param_order
           params <- method_info$parameters
           if(length(param_order) > 0) params <- params[param_order]
-          
           
 ############ Generate documentation text ############
           doc_text <- glue::glue(
@@ -218,6 +217,16 @@ make_google_package <- function(api_name,
                                 "#' }}", 
                                 .trim = F)
           
+          # Add body to documentation text.
+          if(!is.null(body_schema_ref)){
+             
+             doc_text <- glue::glue("{doc_text}",
+                                    "\n\t",
+                                    "#' @param {body_schema_ref} The \\link{{{body_schema_ref}}} object to pass to this method.", 
+                                    .trim = F)
+          }
+         
+          # Add function params to documentation.
           for(param in names(params)){
                
                param_info <- method_info$parameters[[param]]
@@ -254,6 +263,16 @@ make_google_package <- function(api_name,
                                      "{function_name} <- function(",
                                      .trim = F)
           
+          
+          # Add body to function definition.
+          if(!is.null(body_schema_ref)){
+             
+             function_text <- glue::glue("{function_text}",
+                                         "{body_schema_ref}, ",
+                                         .trim = F)
+          }
+          
+          # Add params to function definition.
           for(param in names(params)){
                 function_text <- glue::glue("{function_text}", "{param} = NULL, ")
           }
@@ -287,9 +306,13 @@ make_google_package <- function(api_name,
           # TODO: NEED TO ADD useragent to request_make.
           function_text <- glue::glue("{function_text}", 
                                      "\n\t\t",
-                                     "params <- as.list(environment())[!names(as.list(environment())) %in% c('body', 'return_response', 'token')]",
+                                     "params <- as.list(environment())[!names(as.list(environment())) %in% c(",
+                                     ifelse(!is.null(body_schema_ref), "'{body_schema_ref}', ", ""),
+                                     "'return_response', 'token')]",
                                      "\n\t\t",
-                                     "req <- gargle::request_build(method = '{method}', path = '{path}', params = params, body = NULL, token = token, base_url = '{base_url}')",
+                                     "req <- gargle::request_build(method = '{method}', path = '{path}', params = params, ",
+                                     ifelse(!is.null(body_schema_ref), "body = {body_schema_ref}, ", ""),
+                                     "token = token, base_url = '{base_url}')",
                                      "\n\t\t",
                                      "res <- gargle::request_make(req, encode = 'json')",
                                      "\n\t\t",
