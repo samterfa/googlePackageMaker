@@ -19,69 +19,104 @@ make_google_package <- function(api_name,
                                 output_dir,
                                 package_name){
      
+   # Load API info
    api_info <- get_google_api(api_name, api_version)
    
-     final_package_path <- glue::glue('{output_dir}/{package_name}') %>% sub(pattern = '//', replacement = '/')
-     
-     if(dir.exists(final_package_path)){
-             readline(glue::glue('{final_package_path} exists and will be overwritten! Press ESC to abort.'))
-     }
-     
-     if(!dir.exists(output_dir)) dir.create(output_dir)
-     if(!dir.exists(tempdir())) dir.create(tempdir())
-     
-     temp_package_dir <- glue::glue('{tempdir()}/{package_name}')
-     if(!dir.exists(temp_package_dir)) dir.create(temp_package_dir)
-     
-     temp_script_dir <- glue::glue('{temp_package_dir}/R')
-     if(!dir.exists(temp_script_dir)) dir.create(temp_script_dir)
-     
-     # Create a file per API resource.
-     for(resource in names(api_info$resources)) file.create(glue::glue('{temp_script_dir}/{resource}.R'))
-     
-     # Create scopes file for scopes functions.
-     file.create(glue::glue('{temp_script_dir}/scopes.R'))
-     
+   ############ Create package file structure ############
+   final_package_path <- glue::glue('{output_dir}/{package_name}') %>% sub(pattern = '//', replacement = '/')
+   
+   if(dir.exists(final_package_path)){
+      readline(glue::glue('{final_package_path} exists and will be overwritten! Press ESC to abort.'))
+   }
+   
+   if(!dir.exists(output_dir)) dir.create(output_dir)
+   if(!dir.exists(tempdir())) dir.create(tempdir())
+   
+   temp_package_dir <- glue::glue('{tempdir()}/{package_name}')
+   if(!dir.exists(temp_package_dir)) dir.create(temp_package_dir)
+   
+   temp_script_dir <- glue::glue('{temp_package_dir}/R')
+   if(!dir.exists(temp_script_dir)) dir.create(temp_script_dir)
+   
+   # Create a file per API resource.
+   for(resource in names(api_info$resources)) file.create(glue::glue('{temp_script_dir}/{resource}.R'))
+   
+   # Create scopes file for scopes functions.
+   file.create(glue::glue('{temp_script_dir}/scopes.R'))
+   
+   # Create schemas file for schema functions.
+   file.create(glue::glue('{temp_script_dir}/schemas.R'))
+   
+   
+   ############  Create get_function_scopes function. ############
+   
+   all_scopes <- api_info$auth$oauth2$scopes %>% names()
+   
+   scopes_text <- glue::glue("\n\t",
+                             "#' Get a list of scopes needed for an API function",
+                             "\n\t",
+                             "#' This function returns the list of needed scopes for a given API function.",
+                             "\n\t",
+                             "#'",
+                             "' @seealso \\href{{https://developers.google.com/identity/protocols/oauth2/scopes}}",
+                             "\n\t",
+                             "#' @param function_name The name of the API function to return scopes for.",
+                             "\n\t",
+                             "#' @param return_all Whether to return all scopes for the API. Defaults to FALSE.",
+                             "\n\t",
+                             "#' @export",
+                             "\n\t",
+                             "get_function_scopes <- function(function_name = NULL, return_all = F){{",
+                             "\n\n\t\t",
+                             "# Return all scopes",
+                             "\n\t\t",
+                             "scopes <- c(",
+                             .trim = F)
+   
+   for(scope in all_scopes){
+      scopes_text <- glue::glue("{scopes_text}",
+                                "\n\t\t\t'{scope}'",
+                                ifelse(last(all_scopes) != scope, ",", ")"),
+                                .trim = F)
+   }
+   
+   scopes_text <- glue::glue("{scopes_text}",
+                             "\n\n\t\t",
+                             "if(return_all) return(scopes)",
+                             .trim = F)
+   
+   ############  Create schema functions. ############
+   for(schema_info in api_json$schemas){
+      
+      schema_doc_text <- glue::glue("\n\t",
+                                    "#' Create {schema_info$id} object",
+                                    "\n\t",
+                                    "#' {schema_info$description}",
+                                    "\n\t",
+                                    .trim = F)
+                                    
+      for(param in names(schema_info$properties)){
+         
+         param_info <- schema_info$properties[param]
+         
+         schema_doc_text <- glue::glue("\n\t",
+                                       "#' @param {param} ",
+                                       "\n\t",
+                                       "#' {schema_info$description}",
+                                       "\n\t",
+                                       .trim = F)
+         
+      }
+      
+      
+   }
+   
+   
      # Form strings which can be evaluated to subset json documentation for methods
      methods <- api_info$resources %>% unlist(recursive = T) %>% names() %>%purrr::keep(~(.x %>% stringr::str_detect('methods.*.id')) & (.x %>% stringr::str_detect('.id$'))) %>% stringr::str_replace_all('.id$', '')
      method_docs <- paste0('api_info$resources$', methods %>% stringr::str_replace_all(stringr::fixed('.'), '$')) %>% sort()
      base_url <- api_info$rootUrl   ### NOT baseUrl since gargle doesn't handle multiple forward slashes in the base_url field of a request.
      path_prefix <- sub(api_info$rootUrl, '', api_info$baseUrl)
-     all_scopes <- api_info$auth$oauth2$scopes %>% names()
-     
-     # Create get_function_scopes function.
-     scopes_text <- glue::glue("\n\t",
-                               "#' Get a list of scopes needed for an API function",
-                               "\n\t",
-                               "#' This function returns the list of needed scopes for a given API function.",
-                               "\n\t",
-                               "#'",
-                               "' @seealso \\href{{https://developers.google.com/identity/protocols/oauth2/scopes}}",
-                               "\n\t",
-                               "#' @param function_name The name of the API function to return scopes for.",
-                               "\n\t",
-                               "#' @param return_all Whether to return all scopes for the API. Defaults to FALSE.",
-                               "\n\t",
-                               "#' @export",
-                               "\n\t",
-                               "get_function_scopes <- function(function_name = NULL, return_all = F){{",
-                               "\n\n\t\t",
-                               "# Return all scopes",
-                               "\n\t\t",
-                               "scopes <- c(",
-                               .trim = F)
-   
-     for(scope in all_scopes){
-             scopes_text <- glue::glue("{scopes_text}",
-                                       "\n\t\t\t'{scope}'",
-                                       ifelse(last(all_scopes) != scope, ",", ")"),
-                                       .trim = F)
-     }
-     
-     scopes_text <- glue::glue("{scopes_text}",
-                               "\n\n\t\t",
-                               "if(return_all) return(scopes)",
-                               .trim = F)
      
      # https://developers.google.com/discovery/v1/reference/apis
      for(method_doc in method_docs){
@@ -94,7 +129,7 @@ make_google_package <- function(api_name,
           
           # function name i function id. may revisit
           function_id <- method_info$id
-          function_name <- function_id
+          function_name <- substr(x = function_id, start = regexpr(text = function_id, pattern = '.', fixed = T)[[1]] + 1, stop = nchar(function_id))
           
           # description of function
           function_description <- method_info$description
@@ -146,7 +181,7 @@ make_google_package <- function(api_name,
           if(length(param_order) > 0) params <- params[param_order]
           
           
-############ Generate documentation text ###############
+############ Generate documentation text ############
           doc_text <- glue::glue(
                
                "\n\t",
