@@ -33,7 +33,9 @@ make_google_package <- function(api_name,
    if(!dir.exists(tempdir())) dir.create(tempdir())
    
    temp_package_dir <- glue::glue('{tempdir()}/{package_name}')
-   if(!dir.exists(temp_package_dir)) dir.create(temp_package_dir)
+   if(dir.exists(temp_package_dir)) unlink(temp_package_dir, recursive = T, force = T)
+   
+   dir.create(temp_package_dir)
    
    temp_script_dir <- glue::glue('{temp_package_dir}/R')
    if(!dir.exists(temp_script_dir)) dir.create(temp_script_dir)
@@ -42,14 +44,13 @@ make_google_package <- function(api_name,
    for(resource in names(api_info$resources)) file.create(glue::glue('{temp_script_dir}/{resource}.R'))
    
    # Create scopes file for scopes functions.
-   file.create(glue::glue('{temp_script_dir}/scopes.R'))
+   file.create(glue::glue('{temp_script_dir}/zzz_scopes.R'))
    
    # Create schemas file for schema functions.
-   file.create(glue::glue('{temp_script_dir}/schemas.R'))
+   file.create(glue::glue('{temp_script_dir}/zzz_schemas.R'))
    
    
-   ############  Create get_function_scopes function. ############
-   
+############  Create get_function_scopes function. ############
    all_scopes <- api_info$auth$oauth2$scopes %>% names()
    
    scopes_text <- glue::glue("\n\t",
@@ -85,30 +86,65 @@ make_google_package <- function(api_name,
                              "if(return_all) return(scopes)",
                              .trim = F)
    
-   ############  Create schema functions. ############
-   for(schema_info in api_json$schemas){
+   schemas_text <- ''
+   
+############  Create schema functions. ############
+   for(schema_info in api_info$schemas){
       
-      schema_doc_text <- glue::glue("\n\t",
-                                    "#' Create {schema_info$id} object",
-                                    "\n\t",
-                                    "#' {schema_info$description}",
-                                    "\n\t",
-                                    .trim = F)
-                                    
+      schemas_text <- glue::glue("{schemas_text}",
+                                 "\n\t",
+                                 "#' {schema_info$id} object",
+                                 "\n\t",
+                                 "#'",
+                                 "\n\t",
+                                 ifelse(!is.null(schema_info$description), "#' {schema_info$description  %>% stringr::str_replace_all(stringr::fixed('\n'), replacement = ' ')}", "#' Create {schema_info$id} object"),
+                                 "\n\t",
+                                 "#'",
+                                 .trim = F)
+      
+      # Add schema params to schema doc text.                   
       for(param in names(schema_info$properties)){
          
-         param_info <- schema_info$properties[param]
+         param_info <- schema_info$properties[[param]]
+        
+         param_description <- param_info$description %>% stringr::str_replace_all(stringr::fixed('\n'), replacement = ' ')
          
-         schema_doc_text <- glue::glue("\n\t",
-                                       "#' @param {param} ",
+         schemas_text <- glue::glue("{schemas_text}",
                                        "\n\t",
-                                       "#' {schema_info$description}",
-                                       "\n\t",
+                                       "#' @param {param} {ifelse(length(param_description) > 0, param_description, '')}",
                                        .trim = F)
-         
       }
       
+      schemas_text <- glue::glue("{schemas_text}",
+                                    "\n\t",
+                                    "#'",
+                                    "\n\t",
+                                    "#' @export",
+                                    "\n\t",
+                                    "{schema_info$id} <- function(",
+                                    .trim = F)
       
+      # Add schema params to schema function text.                  
+      for(param in names(schema_info$properties)){
+         
+         param_info <- schema_info$properties[[param]]
+         
+         schemas_text <- glue::glue("{schemas_text}",
+                                    "{param} = NULL, ",
+                                    .trim = F)
+      }
+      
+      # Remove ,{space} from end of function parameters list.
+      if(length(names(schema_info$properties)) > 0) schemas_text <- schemas_text %>% stringr::str_sub(end = -3)
+      
+      schemas_text <- glue::glue("{schemas_text}",
+                                 "){{",
+                                 "\n\t\t",
+                                 "as.list(environment())",
+                                 "\n\t",
+                                 "}}",
+                                 "\n\t",
+                                 .trim = F)
    }
    
    
@@ -146,9 +182,10 @@ make_google_package <- function(api_name,
           # relevant schema for body of the request
           if(!is.null(method_info$request)){
                
-               body_schema_ref <- method_info$request$`ref`
+               body_schema_ref <- method_info$request$`$ref`
                
                body_schema <- api_info$schemas[body_schema_ref]
+               
           }else{
                
                body_schema_ref <- NULL
@@ -179,7 +216,6 @@ make_google_package <- function(api_name,
           # list of path and query parameters for api call ordered by param_order
           params <- method_info$parameters
           if(length(param_order) > 0) params <- params[param_order]
-          
           
 ############ Generate documentation text ############
           doc_text <- glue::glue(
@@ -218,6 +254,16 @@ make_google_package <- function(api_name,
                                 "#' }}", 
                                 .trim = F)
           
+          # Add body to documentation text.
+          if(!is.null(body_schema_ref)){
+             
+             doc_text <- glue::glue("{doc_text}",
+                                    "\n\t",
+                                    "#' @param {body_schema_ref} The \\link{{{body_schema_ref}}} object to pass to this method.", 
+                                    .trim = F)
+          }
+         
+          # Add function params to documentation.
           for(param in names(params)){
                
                param_info <- method_info$parameters[[param]]
@@ -254,6 +300,16 @@ make_google_package <- function(api_name,
                                      "{function_name} <- function(",
                                      .trim = F)
           
+          
+          # Add body to function definition.
+          if(!is.null(body_schema_ref)){
+             
+             function_text <- glue::glue("{function_text}",
+                                         "{body_schema_ref}, ",
+                                         .trim = F)
+          }
+          
+          # Add params to function definition.
           for(param in names(params)){
                 function_text <- glue::glue("{function_text}", "{param} = NULL, ")
           }
@@ -287,9 +343,13 @@ make_google_package <- function(api_name,
           # TODO: NEED TO ADD useragent to request_make.
           function_text <- glue::glue("{function_text}", 
                                      "\n\t\t",
-                                     "params <- as.list(environment())[!names(as.list(environment())) %in% c('body', 'return_response', 'token')]",
+                                     "params <- as.list(environment())[!names(as.list(environment())) %in% c(",
+                                     ifelse(!is.null(body_schema_ref), "'{body_schema_ref}', ", ""),
+                                     "'return_response', 'token')]",
                                      "\n\t\t",
-                                     "req <- gargle::request_build(method = '{method}', path = '{path}', params = params, body = NULL, token = token, base_url = '{base_url}')",
+                                     "req <- gargle::request_build(method = '{method}', path = '{path}', params = params, ",
+                                     ifelse(!is.null(body_schema_ref), "body = {body_schema_ref}, ", ""),
+                                     "token = httr::config(token = token), base_url = '{base_url}')",
                                      "\n\t\t",
                                      "res <- gargle::request_make(req, encode = 'json')",
                                      "\n\t\t",
@@ -311,9 +371,15 @@ make_google_package <- function(api_name,
                                .trim = F)
      
      # Write scopes function to file.
-     readr::write_lines(scopes_text, glue::glue('{temp_script_dir}/scopes.R'), append = F)
+     readr::write_lines(scopes_text, glue::glue('{temp_script_dir}/zzz_scopes.R'), append = F)
+     
+     # Write schema functions to file.
+     readr::write_lines(schemas_text, glue::glue('{temp_script_dir}/zzz_schemas.R'), append = F)
      
      # Output package files
+     for(file_to_remove in list.files(glue::glue('{final_package_path}/R'))){
+        file.remove(glue::glue('{final_package_path}/R/{file_to_remove}'))
+     }
      file.copy(from = temp_package_dir, to = output_dir, recursive = T, overwrite = T)
      
      T
