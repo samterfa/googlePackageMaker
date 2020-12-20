@@ -33,7 +33,9 @@ make_google_package <- function(api_name,
    if(!dir.exists(tempdir())) dir.create(tempdir())
    
    temp_package_dir <- glue::glue('{tempdir()}/{package_name}')
-   if(!dir.exists(temp_package_dir)) dir.create(temp_package_dir)
+   if(dir.exists(temp_package_dir)) unlink(temp_package_dir, recursive = T, force = T)
+   
+   dir.create(temp_package_dir)
    
    temp_script_dir <- glue::glue('{temp_package_dir}/R')
    if(!dir.exists(temp_script_dir)) dir.create(temp_script_dir)
@@ -87,7 +89,7 @@ make_google_package <- function(api_name,
    schemas_text <- ''
    
 ############  Create schema functions. ############
-   for(schema_info in api_json$schemas){
+   for(schema_info in api_info$schemas){
       
       schemas_text <- glue::glue("{schemas_text}",
                                  "\n\t",
@@ -105,9 +107,11 @@ make_google_package <- function(api_name,
          
          param_info <- schema_info$properties[[param]]
         
+         param_description <- param_info$description %>% stringr::str_replace_all(stringr::fixed('\n'), replacement = ' ')
+         
          schemas_text <- glue::glue("{schemas_text}",
                                        "\n\t",
-                                       "#' @param {param} {param_info$description %>% stringr::str_replace_all(stringr::fixed('\n'), replacement = ' ')}",
+                                       "#' @param {param} {ifelse(length(param_description) > 0, param_description, '')}",
                                        .trim = F)
       }
       
@@ -131,7 +135,9 @@ make_google_package <- function(api_name,
       }
       
       # Remove ,{space} from end of function parameters list.
-      schemas_text <- glue::glue("{schemas_text %>% stringr::str_sub(end = -3)}",
+      if(length(names(schema_info$properties)) > 0) schemas_text <- schemas_text %>% stringr::str_sub(end = -3)
+      
+      schemas_text <- glue::glue("{schemas_text}",
                                  "){{",
                                  "\n\t\t",
                                  "as.list(environment())",
@@ -371,6 +377,9 @@ make_google_package <- function(api_name,
      readr::write_lines(schemas_text, glue::glue('{temp_script_dir}/zzz_schemas.R'), append = F)
      
      # Output package files
+     for(file_to_remove in list.files(glue::glue('{final_package_path}/R'))){
+        file.remove(glue::glue('{final_package_path}/R/{file_to_remove}'))
+     }
      file.copy(from = temp_package_dir, to = output_dir, recursive = T, overwrite = T)
      
      T
