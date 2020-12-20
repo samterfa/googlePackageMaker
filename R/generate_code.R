@@ -28,12 +28,15 @@ make_google_package <- function(api_id,
    
    temp_package_dir <- glue::glue('{tempdir()}/{package_name}')
    if(dir.exists(temp_package_dir)) unlink(temp_package_dir, recursive = T, force = T)
+
+
    
    dir.create(temp_package_dir)
    
    temp_script_dir <- glue::glue('{temp_package_dir}/R')
    dir.create(temp_script_dir)
    
+
    temp_data_raw_dir <- glue::glue('{temp_package_dir}/data-raw')
    dir.create(temp_data_raw_dir)
    
@@ -41,6 +44,7 @@ make_google_package <- function(api_id,
    ### ADD usethis function calls for package generation here.
    
    
+
    
    # Load API info
    suppressMessages(
@@ -165,6 +169,7 @@ make_google_package <- function(api_id,
                              "\n\t",
                              "#' @export", 
                              .trim = F)
+
       
       ############ Generate function text ###############
       function_text <- glue::glue("\t",
@@ -217,6 +222,7 @@ make_google_package <- function(api_id,
       # Update appropriate file with new documentation and function.
       readr::write_lines(doc_text, category_file, append = T)
       readr::write_lines(function_text, category_file, append = T)
+
    }
    
    # Output package files
