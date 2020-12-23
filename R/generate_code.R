@@ -23,7 +23,10 @@ make_google_package <- function(api_id,
    assertthat::assert_that(!dir.exists(final_package_path), msg = glue::glue('Package path {final_package_path} cannot be pre-existing.'))
    
    if(!dir.exists(output_dir)) dir.create(output_dir)
-   if(!dir.exists(tempdir())) dir.create(tempdir())
+   
+   # Remove tempdir() for fresh start.
+   unlink(tempdir(), recursive = T, force = T)
+   dir.create(tempdir())
    
    temp_package_dir <- file.path(tempdir(), package_name)
    if(dir.exists(temp_package_dir)) unlink(temp_package_dir, recursive = T, force = T)
