@@ -4,7 +4,7 @@
 #' 
 #' Does not require authentication
 #' @param name Only include APIs with the given name. *Case-sensitive. All are lowercase currently.
-#' @param preferred Return only the preferred version of an API.  "false" by default.
+#' @param preferred Return only the preferred version of an API.  FALSE by default.
 #' 
 #' @seealso \url{https://developers.google.com/discovery/v1/reference/apis/list}
 #' 
@@ -12,7 +12,7 @@
 #' @family Google Discovery API functions
 #' 
 #' @export
-list_google_apis <- function(name = NULL, preferred = NULL){
+api_list <- function(name = NULL, preferred = NULL){
   
   name <- tolower(name)
   
@@ -41,14 +41,13 @@ list_google_apis <- function(name = NULL, preferred = NULL){
 #' 
 #' @param api The API to fetch
 #' @param version The API version to fetch
-#' @param a_url Supply your own discovery URL, for private APIs only
 #' 
 #' @seealso \url{https://developers.google.com/discovery/v1/getting_started}
 #' 
 #' @return Details of the API 
 #' @family Google Discovery API functions
 #' @export
-get_google_api <- function(api, version){
+api_get <- function(api, version){
   
   the_url <- glue::glue("https://www.googleapis.com/discovery/v1/apis/{api}/{version}/rest")
   
