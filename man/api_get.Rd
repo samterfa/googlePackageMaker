@@ -19,9 +19,5 @@ Download the discovery document for an API
 }
 \seealso{
 \url{https://developers.google.com/discovery/v1/getting_started}
-
-Other Google Discovery API functions: 
-\code{\link{api_list}()},
-\code{\link{package_make}()}
 }
 \concept{Google Discovery API functions}

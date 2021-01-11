@@ -23,8 +23,7 @@ This function will generate a package of Google API functions.
 You will still need to run devtools::document(your_package_directory) and install your package for testing.
 }
 \seealso{
-Other Google Discovery API functions: 
-\code{\link{api_get}()},
+Other API Discovery Service: 
 \code{\link{api_list}()}
 }
-\concept{Google Discovery API functions}
+\concept{API Discovery Service}

@@ -20,8 +20,7 @@ Does not require authentication
 \seealso{
 \url{https://developers.google.com/discovery/v1/reference/apis/list}
 
-Other Google Discovery API functions: 
-\code{\link{api_get}()},
+Other API Discovery Service: 
 \code{\link{package_make}()}
 }
-\concept{Google Discovery API functions}
+\concept{API Discovery Service}
