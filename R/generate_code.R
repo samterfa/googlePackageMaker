@@ -5,9 +5,9 @@ this_package <- 'googlePackageMaker'
 #' 
 #' This function will generate a package of Google API functions.
 #' 
-#' @api_id The api to fetch. Run \code{\link[{this_package}]{list_google_apis} for options.
+#' @param api_id The api to fetch. Run \code{\link[{this_package}]{list_google_apis}} for options.
 #' @param output_dir Directory path to write the package to.
-#' @param package_name Name of the package to create. NOTE: {output_dir}/{package_name} cannot be pre-existing.
+#' @param package_name Name of the package to create. NOTE: \{output_dir\}/\{package_name\} cannot be pre-existing.
 #' 
 #' @return TRUE if successful, side effect will write package directory {output_dir}/{package_name}.
 #' @family Google Discovery API functions
@@ -24,9 +24,7 @@ make_google_package <- function(api_id,
    
    if(!dir.exists(output_dir)) dir.create(output_dir)
    
-   # Remove tempdir() for fresh start.
-   unlink(tempdir(), recursive = T, force = T)
-   dir.create(tempdir())
+   if(!dir.exists(tempdir())) dir.create(tempdir())
    
    temp_package_dir <- file.path(tempdir(), package_name)
    if(dir.exists(temp_package_dir)) unlink(temp_package_dir, recursive = T, force = T)
@@ -231,13 +229,11 @@ make_google_package <- function(api_id,
 
    }
    
-   ### Can run devtools::document(final_package_path) but may run into problems. 
-   
    # Output package files.
    file.copy(from = temp_package_dir, to = output_dir, recursive = T, overwrite = F)
    
-   # Launch the project in RStudio.
-   usethis::proj_activate(final_package_path)
+   # This doesn't consistently work.
+   ### devtools::document(final_package_path)
    
    T
 }
