@@ -9,7 +9,7 @@
 #' @seealso \url{https://developers.google.com/discovery/v1/reference/apis/list}
 #' 
 #' @return List of Google APIs and their resources
-#' @family Google Discovery API functions
+#' @family API Discovery Service
 #' 
 #' @export
 api_list <- function(name = NULL, preferred = NULL){

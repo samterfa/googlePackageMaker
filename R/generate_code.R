@@ -9,7 +9,7 @@
 #' 
 #' @return TRUE if successful, side effect will write package directory output_dir/package_name.
 #' @note You will still need to run devtools::document(your_package_directory) and install your package for testing.
-#' @family Google Discovery API functions
+#' @family API Discovery Service
 #' @export
 package_make <- function(api_id,
                          output_dir,
