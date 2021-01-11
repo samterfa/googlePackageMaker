@@ -2,14 +2,14 @@ Package: googlePackageMaker
 Title: Generate R Packages for Google APIs
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "Sam",
+    c(person(given = "Sam",
            family = "Terfa",
            role = c("aut", "cre"),
            email = "samterfa@gmail.com"),
      person(given = "Mark",
            family = "Edmondson",
-           role = c("aut", "cre"),
-           email = "m@sunholo.com")
+           role = c("ctb"),
+           email = "m@sunholo.com"))
 Description: This package generates R packages for Google
     APIs.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to
@@ -24,6 +24,7 @@ Imports:
     dplyr,
     purrr,
     glue,
-    stringr
+    stringr,
+    magrittr
 Depends: 
     R (>= 2.10)

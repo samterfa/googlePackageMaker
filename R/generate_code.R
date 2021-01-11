@@ -44,6 +44,9 @@ make_google_package <- function(api_id,
    api_info <- discovery_docs[[1]]
    methods <- discovery_docs[[2]]
    
+   # Remove extra characters from endpoint paths.
+   for(method in names(methods)){methods[[method]]$path <- methods[[method]]$path %>% stringr::str_remove_all(stringr::fixed('+'))}
+   
    ############ ADD usethis function calls for package generation here. ############
    usethis::create_package(temp_package_dir, open = F, fields = list(Title = glue::glue("Consume Google's {api_info$title}"),
                                                                      Description = glue::glue("{api_info$description} ",
@@ -209,9 +212,9 @@ make_google_package <- function(api_id,
                                   ###         ifelse(!is.null(body_schema_ref), "'{body_schema_ref}', ", ""),
                                   "'return_response', 'gargle_token')]",
                                   "\n\t\t",
-                                    "req <- gargle::request_develop(endpoint = .endpoints[['{function_id}']], params = params)",
+                                    "req <- gargle::request_develop(endpoint = .endpoints[['{function_id}']], params = params, base_url = '{base_url}')",
                                   "\n\t\t",
-                                  "req <- gargle::request_build(method = req$method, path = req$path, params = req$params, body = req$body, token = httr::config(token = gargle_token))",
+                                  "req <- gargle::request_build(method = req$method, path = req$path, params = req$params, body = req$body, token = httr::config(token = gargle_token), base_url = req$base_url)",
                                   "\n\t\t",
                                   "res <- gargle::request_make(req, encode = 'json')",
                                   "\n\t\t",
