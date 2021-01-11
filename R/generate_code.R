@@ -5,11 +5,12 @@ this_package <- 'googlePackageMaker'
 #' 
 #' This function will generate a package of Google API functions.
 #' 
-#' @param api_id The api to fetch. Run \code{\link[{this_package}]{list_google_apis}} for options.
+#' @param api_id The api to fetch. Run \code{\link{list_google_apis}} for options.
 #' @param output_dir Directory path to write the package to.
-#' @param package_name Name of the package to create. NOTE: \{output_dir\}/\{package_name\} cannot be pre-existing.
+#' @param package_name Name of the package to create. NOTE: output_dir/package_name cannot be pre-existing.
 #' 
-#' @return TRUE if successful, side effect will write package directory {output_dir}/{package_name}.
+#' @return TRUE if successful, side effect will write package directory output_dir/package_name.
+#' @note You will still need to run devtools::document(your_package_directory) and install your package for testing.
 #' @family Google Discovery API functions
 #' @export
 make_google_package <- function(api_id,
@@ -231,9 +232,6 @@ make_google_package <- function(api_id,
    
    # Output package files.
    file.copy(from = temp_package_dir, to = output_dir, recursive = T, overwrite = F)
-   
-   # This doesn't consistently work.
-   ### devtools::document(final_package_path)
    
    T
 }

@@ -7,17 +7,20 @@
 make_google_package(api_id, output_dir, package_name)
 }
 \arguments{
-\item{api_id}{The api to fetch. Run \code{\link[{this_package}]{list_google_apis}} for options.}
+\item{api_id}{The api to fetch. Run \code{\link{list_google_apis}} for options.}
 
 \item{output_dir}{Directory path to write the package to.}
 
-\item{package_name}{Name of the package to create. NOTE: \{output_dir\}/\{package_name\} cannot be pre-existing.}
+\item{package_name}{Name of the package to create. NOTE: output_dir/package_name cannot be pre-existing.}
 }
 \value{
-TRUE if successful, side effect will write package directory {output_dir}/{package_name}.
+TRUE if successful, side effect will write package directory output_dir/package_name.
 }
 \description{
 This function will generate a package of Google API functions.
+}
+\note{
+You will still need to run devtools::document(your_package_directory) and install your package for testing.
 }
 \seealso{
 Other Google Discovery API functions: 
