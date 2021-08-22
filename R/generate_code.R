@@ -198,7 +198,7 @@ package_make <- function(api_id,
       # Finish off function parameters list
       function_text <- glue::glue("{function_text}",
                                   ####         "token = gargle::token_fetch(scopes = get_function_scopes('{function_id}')), return_response = F, fields = NULL){{",
-                                  "gargle_token = gargle::token_fetch(scopes = .endpoints[['{function_id}']]$scopes), return_response = F){{",
+                                  "gargle_token = gargle::token_fetch(scopes = .endpoints[['{function_id}']]$scopes[[1]]), return_response = F){{",
                                   .trim = F)
       
       # Build function
