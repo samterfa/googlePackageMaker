@@ -22,6 +22,19 @@ preprocess_methods <- function(api_id, dir = '.'){
   )
   methods <- methods %>% map(add_global_params, dd)
   
+  # Remove pesky parameters beginning with "$" character. $.xgafv for example
+  methods <-
+    methods %>% 
+    map(
+      function(method) {
+        method$parameters <- 
+          method$parameters %>% 
+          discard(names(.) %>% 
+                    str_detect(fixed('$'))) 
+        return(method)
+      }
+    )
+  
   ## duplicate two methods to create a companion for media
   ## simpler to do this here, in data, than in wrapper functions
   
