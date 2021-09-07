@@ -30,7 +30,7 @@ package_make <- function(api_id,
    dir.create(temp_package_dir)
    
    temp_script_dir <- glue::glue('{temp_package_dir}/R')
-  
+   
    temp_data_raw_dir <- glue::glue('{temp_package_dir}/data-raw')
    dir.create(temp_data_raw_dir)
    
@@ -60,7 +60,7 @@ package_make <- function(api_id,
    
    .endpoints <- methods
    usethis::use_data(.endpoints, internal = T, overwrite = T)
-    
+   
    # Form strings which can be evaluated to subset json documentation for methods
    base_url <- api_info$rootUrl   ### NOT baseUrl since gargle doesn't handle multiple forward slashes in the base_url field of a request.
    path_prefix <- sub(api_info$rootUrl, '', api_info$baseUrl)
@@ -163,10 +163,12 @@ package_make <- function(api_id,
                                 .trim = F)
       }
       
-      # Add token and return_response as well.
+      # Add token, return_request, and return_response as well.
       doc_text <- glue::glue("{doc_text}", 
                              "\n\t",
                              "#' @param gargle_token A token prepared by one of gargle's token generating functions. Defaults to gargle::token_fetch(...) with appropriate scopes. See \\code{{\\link[gargle]{{token_fetch}}}} for more info.",
+                             "\n\t",
+                             "#' @param return_request Whether to return the request without making it. Defaults to FALSE. See \\code{{\\link[gargle]{{request_build}}}} for more info on the returned request object.",
                              "\n\t",
                              "#' @param return_response Whether to return the response or the response content. Defaults to FALSE (return response content).", 
                              .trim = F)
@@ -175,7 +177,7 @@ package_make <- function(api_id,
                              "\n\t",
                              "#' @export", 
                              .trim = F)
-
+      
       
       ############ Generate function text ###############
       function_text <- glue::glue("\t",
@@ -198,7 +200,7 @@ package_make <- function(api_id,
       # Finish off function parameters list
       function_text <- glue::glue("{function_text}",
                                   ####         "token = gargle::token_fetch(scopes = get_function_scopes('{function_id}')), return_response = F, fields = NULL){{",
-                                  "gargle_token = gargle::token_fetch(scopes = .endpoints[['{function_id}']]$scopes[[1]]), return_response = F){{",
+                                  "gargle_token = gargle::token_fetch(scopes = .endpoints[['{function_id}']]$scopes[[1]]), return_request = F, return_response = F){{",
                                   .trim = F)
       
       # Build function
@@ -207,11 +209,13 @@ package_make <- function(api_id,
                                   "\n\t\t",
                                   "params <- as.list(environment())[!names(as.list(environment())) %in% c(",
                                   ###         ifelse(!is.null(body_schema_ref), "'{body_schema_ref}', ", ""),
-                                  "'return_response', 'gargle_token')]",
+                                  "'return_request', 'return_response', 'gargle_token')]",
                                   "\n\t\t",
-                                    "req <- gargle::request_develop(endpoint = .endpoints[['{function_id}']], params = params, base_url = '{base_url}')",
+                                  "req <- gargle::request_develop(endpoint = .endpoints[['{function_id}']], params = params, base_url = '{base_url}')",
                                   "\n\t\t",
                                   "req <- gargle::request_build(method = req$method, path = req$path, params = req$params, body = req$body, token = httr::config(token = gargle_token), base_url = req$base_url)",
+                                  "\n\t\t",
+                                  "if(return_request) return(req)",
                                   "\n\t\t",
                                   "res <- gargle::request_make(req, encode = 'json')",
                                   "\n\t\t",
@@ -225,7 +229,7 @@ package_make <- function(api_id,
       # Update appropriate file with new documentation and function.
       readr::write_lines(doc_text, category_file, append = T)
       readr::write_lines(function_text, category_file, append = T)
-
+      
    }
    
    # Output package files.
@@ -243,3 +247,50 @@ create_function_name <- function(function_id){
    
    str_sub(function_id, periods[[1]] + 1)
 }
+
+
+
+make_batch_request <- function(requests, content_ids = list()){
+   
+   '
+   --batch_test
+Content-Type: application/http
+Content-ID: techgroup@minnehahaacademy.net
+
+GET /admin/directory/v1/groups/techgroup@minnehahaacademy.net/members
+
+--batch_test
+Content-Type: application/http
+Content-ID: techteam@minnehahaacademy.net
+
+GET /admin/directory/v1/groups/techteam@minnehahaacademy.net/members
+
+--batch_test--
+   '
+   
+}
+
+process_batch_response <- function(response){
+   
+   responses <-
+      httr::content(response, as = 'text') %>% 
+      stringr::str_split('Content-Type: application/http') %>% 
+      purrr::pluck(1) %>% 
+      stringr::str_subset('\r\nContent-ID: response-') %>% 
+      stringr::str_split('\r\n\r\n') %>% 
+      purrr::map(~ .x %>% stringr::str_remove_all('[\r \n]'))
+   
+   content_ids <-
+      responses %>%
+      map_chr(~ .x %>% stringr::str_subset('Content-ID'))
+   
+   contents <-
+      responses %>%
+      purrr::map(~ .x %>% stringr::str_subset(fixed('{'))) %>% 
+      stringr::str_remove_all('--batch.*') %>%
+      map(~ .x %>% jsonlite::fromJSON()) %>%
+      setNames(content_ids %>% stringr::str_remove('response-'))
+   
+   contents
+}
+
