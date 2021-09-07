@@ -249,27 +249,6 @@ create_function_name <- function(function_id){
 }
 
 
-
-make_batch_request <- function(requests, content_ids = list()){
-   
-   '
-   --batch_test
-Content-Type: application/http
-Content-ID: techgroup@minnehahaacademy.net
-
-GET /admin/directory/v1/groups/techgroup@minnehahaacademy.net/members
-
---batch_test
-Content-Type: application/http
-Content-ID: techteam@minnehahaacademy.net
-
-GET /admin/directory/v1/groups/techteam@minnehahaacademy.net/members
-
---batch_test--
-   '
-   
-}
-
 process_batch_response <- function(response){
    
    responses <-
@@ -282,15 +261,53 @@ process_batch_response <- function(response){
    
    content_ids <-
       responses %>%
-      map_chr(~ .x %>% stringr::str_subset('Content-ID'))
+      purrr::map_chr(~ .x %>% stringr::str_subset('Content-ID'))
    
    contents <-
       responses %>%
-      purrr::map(~ .x %>% stringr::str_subset(fixed('{'))) %>% 
+      purrr::map(~ .x %>% stringr::str_subset(stringr::fixed('{'))) %>% 
       stringr::str_remove_all('--batch.*') %>%
-      map(~ .x %>% jsonlite::fromJSON()) %>%
+      purrr::map(~ .x %>% jsonlite::fromJSON()) %>%
       setNames(content_ids %>% stringr::str_remove('response-'))
    
    contents
 }
 
+
+make_batch_request <- function(requests, content_ids = list(), gargle_token = gargle::token_fetch(scopes = .endpoints[['{function_id}']]$scopes[[1]]), return_response = F, root_url, batch_path, batch_delim){
+   
+   if(!is.null(names(requests))){
+      requests <- list(requests)
+   }
+   
+   batch_request <-
+      purrr::map2_chr(.x = requests, 
+                      .y = content_ids,
+                      .f =  ~ glue::glue('--{batch_delim}', 
+                                         'Content-Type: application/http', 
+                                         'Content-ID: {.y}', 
+                                         '', 
+                                         paste(.x$method, .x$url %>% stringr::str_remove(root_url)), 
+                                         ifelse(length(.x$body) == 0, 
+                                                '', 
+                                                .x$body %>% jsonlite::toJSON(pretty = T)), 
+                                         '', 
+                                         .sep = '\n')) %>% 
+      append(glue::glue('--{batch_delim}--')) %>% 
+      paste(collapse = '\n')
+   
+   response <-
+      httr::POST(url = glue::glue("{root_url}/{batch_path}"), 
+                 body = batch_request, 
+                 encode = 'multipart', 
+                 httr::add_headers(
+                    Authorization = 
+                       paste('Bearer', gargle_token$credentials$access_token)), 
+                 httr::add_headers(`Accept-Encoding` = "gzip"), 
+                 httr::add_headers(`Content-Type` = glue::glue("multipart/mixed; boundary={batch_delim}"))
+      )
+   
+   if(return_response) return(response)
+   
+   process_batch_response(response)
+}
