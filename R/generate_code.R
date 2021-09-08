@@ -57,6 +57,7 @@ package_make <- function(api_id,
    usethis::use_package('purrr')
    usethis::use_package('glue')
    usethis::use_package('stringr')
+   usethis::use_pipe()
    
    .endpoints <- methods
    usethis::use_data(.endpoints, internal = T, overwrite = T)
@@ -232,6 +233,18 @@ package_make <- function(api_id,
       
    }
    
+   # Create batch request function.
+   api_name <- api_info$title
+   batch_path <- paste0('batch/', api_id %>% stringr::str_replace_all('[: _]', '/'))
+   batch_function_name <- glue::glue("batch.{api_id %>% stringr::str_replace_all('[: _]', '.')}")
+   
+   package_batch_request_file <- glue::glue('{temp_script_dir}/batchRequests.R')
+   file.create(package_batch_request_file)
+   glue::glue(readLines(system.file("templates", "make_batch_request.R", package = "googlePackageMaker")) %>% paste(collapse = '\n'), .trim = F) %>%
+ #  glue::glue(readLines('templates/make_batch_request.R') %>% paste(collapse = '\n'), .trim = F) %>% 
+      stringr::str_remove_all('"') %>% 
+      writeLines(package_batch_request_file)
+      
    # Output package files.
    file.copy(from = temp_package_dir, to = output_dir, recursive = T, overwrite = F)
    
@@ -246,68 +259,4 @@ create_function_name <- function(function_id){
    periods <- function_id %>% str_locate_all(fixed('.')) %>% purrr::pluck(1)
    
    str_sub(function_id, periods[[1]] + 1)
-}
-
-
-process_batch_response <- function(response){
-   
-   responses <-
-      httr::content(response, as = 'text') %>% 
-      stringr::str_split('Content-Type: application/http') %>% 
-      purrr::pluck(1) %>% 
-      stringr::str_subset('\r\nContent-ID: response-') %>% 
-      stringr::str_split('\r\n\r\n') %>% 
-      purrr::map(~ .x %>% stringr::str_remove_all('[\r \n]'))
-   
-   content_ids <-
-      responses %>%
-      purrr::map_chr(~ .x %>% stringr::str_subset('Content-ID'))
-   
-   contents <-
-      responses %>%
-      purrr::map(~ .x %>% stringr::str_subset(stringr::fixed('{'))) %>% 
-      stringr::str_remove_all('--batch.*') %>%
-      purrr::map(~ .x %>% jsonlite::fromJSON()) %>%
-      setNames(content_ids %>% stringr::str_remove('response-'))
-   
-   contents
-}
-
-
-make_batch_request <- function(requests, content_ids = list(), gargle_token = gargle::token_fetch(scopes = .endpoints[['{function_id}']]$scopes[[1]]), return_response = F, root_url, batch_path, batch_delim){
-   
-   if(!is.null(names(requests))){
-      requests <- list(requests)
-   }
-   
-   batch_request <-
-      purrr::map2_chr(.x = requests, 
-                      .y = content_ids,
-                      .f =  ~ glue::glue('--{batch_delim}', 
-                                         'Content-Type: application/http', 
-                                         'Content-ID: {.y}', 
-                                         '', 
-                                         paste(.x$method, .x$url %>% stringr::str_remove(root_url)), 
-                                         ifelse(length(.x$body) == 0, 
-                                                '', 
-                                                .x$body %>% jsonlite::toJSON(pretty = T)), 
-                                         '', 
-                                         .sep = '\n')) %>% 
-      append(glue::glue('--{batch_delim}--')) %>% 
-      paste(collapse = '\n')
-   
-   response <-
-      httr::POST(url = glue::glue("{root_url}/{batch_path}"), 
-                 body = batch_request, 
-                 encode = 'multipart', 
-                 httr::add_headers(
-                    Authorization = 
-                       paste('Bearer', gargle_token$credentials$access_token)), 
-                 httr::add_headers(`Accept-Encoding` = "gzip"), 
-                 httr::add_headers(`Content-Type` = glue::glue("multipart/mixed; boundary={batch_delim}"))
-      )
-   
-   if(return_response) return(response)
-   
-   process_batch_response(response)
 }
